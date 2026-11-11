@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OWASP ACS // AgBOM & CALL-GRAPH ENFORCER</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #0a0a0f; --panel: #111118; --border: #222233; --neon: #00e5ff; --danger: #ff0055; --text: #e0e0e0; }
+  body { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; padding: 20px; font-size: 12px; }
+  .brand { font-family: 'Space Mono', monospace; font-size: 16px; color: var(--neon); margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); padding: 15px; }
+  h3 { color: var(--neon); font-size: 11px; text-transform: uppercase; margin-top: 0; }
+  button { background: #1a1a24; color: var(--text); border: 1px solid var(--border); padding: 8px; cursor: pointer; width: 100%; margin-bottom: 8px; text-align: left; font-family: inherit; font-size: 11px;}
+  button:hover { border-color: var(--neon); color: var(--neon); }
+  button.attack:hover { border-color: var(--danger); color: var(--danger); }
+  pre { background: #050508; border: 1px solid var(--border); padding: 10px; overflow-x: auto; font-size: 10px; color: #a0a0b0; min-height: 100px;}
+</style>
+</head>
+<body>
+<div class="brand">[OWASP ACS POLICY ENGINE] // AST AgBOM SCANNER & Ed25519 MACAROONS</div>
+<div class="grid">
+  <div class="card">
+    <h3>1. Target Agent Discovery (AST Scanning)</h3>
+    <button onclick="scanAgBOM()">[▶] Generate Signed AgBOM from target_agent_repo/</button>
+    <pre id="agbom-out">Awaiting scan...</pre>
+    
+    <h3 style="margin-top:20px;">2. Active Ed25519 Token State</h3>
+    <button onclick="mintToken()">[R] Mint New Root Token (State: INIT)</button>
+    <pre id="token-out">No token active.</pre>
+  </div>
+  
+  <div class="card">
+    <h3>3. Stateful Call-Graph Execution</h3>
+    <button onclick="callTool('scan_repository')">[+] Call: scan_repository (Valid Transition)</button>
+    <button class="attack" onclick="callTool('delete_database')">[!] Attack: call delete_database (Skips Approval)</button>
+    <button onclick="callTool('human_approval_webhook')">[+] Call: human_approval_webhook (Valid Transition)</button>
+    <button onclick="callTool('delete_database')">[+] Call: delete_database (Valid Transition)</button>
+    
+    <h3 style="margin-top:20px;">Policy Enforcer Verdict</h3>
+    <pre id="verdict-out" style="color:var(--neon); font-weight:bold;">Awaiting execution...</pre>
+  </div>
+</div>
+
+<script>
+let currentToken = null;
+
+async function scanAgBOM() {
+    const res = await fetch('/v1/acs/agbom/scan');
+    document.getElementById('agbom-out').textContent = JSON.stringify(await res.json(), null, 2);
+}
+
+async function mintToken() {
+    const res = await fetch('/v1/acs/token/mint', {method: 'POST'});
+    currentToken = await res.json();
+    document.getElementById('token-out').textContent = JSON.stringify(currentToken, null, 2);
+    document.getElementById('verdict-out').textContent = "Awaiting execution...";
+}
+
+async function callTool(toolName) {
+    if (!currentToken) return alert("Mint a token first!");
+    
+    const res = await fetch('/v1/acs/dag/evaluate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({tool_name: toolName, arguments: {}, token: currentToken})
+    });
+    
+    const data = await res.json();
+    document.getElementById('verdict-out').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('verdict-out').style.color = data.status === "DENIED" ? "var(--danger)" : "var(--neon)";
+    
+    if (data.status !== "DENIED") {
+        currentToken = data.new_token;
+        document.getElementById('token-out').textContent = JSON.stringify(currentToken, null, 2);
+    }
+}
+</script>
+</body>
+</html>
